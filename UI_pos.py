@@ -11,8 +11,6 @@ matplotlib.rcParams.update({
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 
-ratio_ylim_selector = 0.5
-
 def init_AFE4300():
     # Initialize the device
     GUI_Module = __import__('Device_GUI')
@@ -29,6 +27,7 @@ def init_AFE4300():
 measurement_running = False
 measurement_data = []
 data_lock = threading.Lock()
+ratio_ylim_selector = 1
 
 def measure_loop():
     global measurement_running, GUI, f
@@ -57,7 +56,7 @@ def measure_loop():
             data_ch24 -= 65536
         data_ch24 = data_ch24 * (1.7 / 32768.0) * 1000
         # Calculate ratio and error
-        ratio = data_ch23 / float(data_ch23 + data_ch34) if (data_ch23 + data_ch34) != 0 else 0
+        ratio = float(data_ch23 - data_ch34) / float(data_ch23 + data_ch34) if (data_ch23 + data_ch34) != 0 else 0
         error = abs(1 - (data_ch23 + data_ch34) / float(data_ch24)) if data_ch24 != 0 else 0
         
         # Define ANSI color codes
@@ -68,7 +67,7 @@ def measure_loop():
         MAGENTA = "\033[35m"
         RESET = "\033[0m"
         
-        print("{}A: {:.2f}{} / {}B: {:.2f}{} / {}A+B: {:.2f}{} / {}ratio: {:.2f}{} / {}error: {:.3f}{}".format(
+        print("Raw {}A: {:.2f}{} / {}B: {:.2f}{} / {}A+B: {:.2f}{} _ Result {}ratio: {:.2f}{} / {}error: {:.3f}{}".format(
               MAGENTA, data_ch23, RESET,
               YELLOW, data_ch34, RESET,
               BLUE, data_ch24, RESET,
@@ -141,11 +140,10 @@ def update_gui():
     ax_top.plot(times, ratios, label="ratio", color="green", linewidth=line_width)
     ax_top.set_title("Position", color='white')
     ax_top.set_xlim(left=max(0, (times[-1]-60)) if times else 0, right=times[-1] if times else 60)
-
-
-    ax_top.set_ylim(0.5-ratio_ylim_selector, 0.5+ratio_ylim_selector)
+    ax_top.set_ylim(-ratio_ylim_selector-0.1, ratio_ylim_selector+0.1)
     ax_top.set_xticks([])
-    ax_top.set_yticks([0.5-ratio_ylim_selector, 0.5, 0.5+ratio_ylim_selector])
+    ax_top.set_yticks([-ratio_ylim_selector, 0, ratio_ylim_selector])
+    ax_top.set_yticklabels(['A', '0', 'B'])
     ax_top.yaxis.grid(True, color='white', linestyle='-', alpha=0.5)  # added y grid
     canvas_right.draw()
     
@@ -168,7 +166,7 @@ def update_gui():
 # Create main window with black theme
 root = tk.Tk()
 root.configure(bg='black')
-root.title("AFE4300 GUI")
+root.title("PICC Detector")
 # Set default Tkinter font to Helvetica Bold
 root.option_add("*Font", "Helvetica 14 bold")
 
@@ -180,7 +178,7 @@ fig_left = Figure(figsize=(5,4), facecolor='black')
 ax_left = fig_left.add_subplot(111)
 canvas_left = FigureCanvasTkAgg(fig_left, master=frame_mid)
 canvas_left.get_tk_widget().configure(bg='black')
-canvas_left.get_tk_widget().pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+canvas_left.get_tk_widget().pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
 # Modification: Adjust fig_right background and spacing between subplots
 fig_right = Figure(figsize=(5,4), facecolor='black')  # changed from 'black'
@@ -189,7 +187,7 @@ ax_top = fig_right.add_subplot(211)
 ax_bottom = fig_right.add_subplot(212)
 canvas_right = FigureCanvasTkAgg(fig_right, master=frame_mid)
 canvas_right.get_tk_widget().configure(bg='black')
-canvas_right.get_tk_widget().pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+canvas_right.get_tk_widget().pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
 # Button changes
 frame_bottom = tk.Frame(root, bg='black')
@@ -212,23 +210,23 @@ start_btn = tk.Button(frame_bottom,
                       height=1,
                       font=('Helvetica', 14, 'bold'))
 
-start_btn.pack(side=tk.LEFT, padx=60, pady=20)
-stop_btn.pack(side=tk.LEFT, padx=0, pady=20)
+stop_btn.pack(side=tk.RIGHT, padx=50, pady=20)
+start_btn.pack(side=tk.RIGHT, padx=0, pady=20)
 
 # Place the ratio input on the top-right of the right canvas
 ratio_entry = tk.Entry(root, font=('Helvetica', 14, 'bold'), width=5)
-ratio_entry.insert(0, "0.5")
+ratio_entry.insert(0, "1")
 ratio_entry.bind("<Return>", lambda event: update_ratio_ylim())
-ratio_entry.place(in_=canvas_right.get_tk_widget(), relx=1.0, rely=0.0, x=-50, y=20, anchor="ne")
+ratio_entry.place(in_=canvas_right.get_tk_widget(), relx=0.78, rely=0.05, x=0, y=0, anchor="nw")
 
 def update_ratio_ylim():
     global ratio_ylim_selector
     try:
         ratio_ylim_selector = float(ratio_entry.get())
     except:
-        ratio_ylim_selector = 0.5
+        ratio_ylim_selector = 1
         ratio_entry.delete(0, tk.END)
-        ratio_entry.insert(0, "0.5")
+        ratio_entry.insert(0, "1")
         
 update_gui()
 root.mainloop()
